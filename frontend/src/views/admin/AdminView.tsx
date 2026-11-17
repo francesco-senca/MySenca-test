@@ -1,0 +1,106 @@
+// Copyright (c) 2026 Giovanni Arborio Mella. All rights reserved.
+import { useEffect, useState, useCallback } from "react";
+import type { Dipendente, UtenteWebApp } from "../../models/domain.js";
+import { DipendentiApi } from "../../services/DipendentiApi.js";
+import { UtentiApi } from "../../services/UtentiApi.js";
+import { TicketApi } from "../../services/TicketApi.js";
+import type { Ticket } from "../../services/TicketApi.js";
+import RoleSwitchMini from "../../components/RoleSwitchMini.js";
+import Logo from "../../components/Logo.js";
+import { NavIcons } from "../../components/NavIcons.js";
+import AdminHome from "./AdminHome.js";
+import AdminAbilitare from "./AdminAbilitare.js";
+import AdminUtenti from "./AdminUtenti.js";
+import AdminTicket from "./AdminTicket.js";
+import AdminAuditLog from "./AdminAuditLog.js";
+import AdminSicurezza from "./AdminSicurezza.js";
+
+type AdminScreen = "home" | "abilitare" | "utenti" | "ticket" | "audit" | "sicurezza";
+
+interface Props {
+  nome: string;
+  showRoleSwitch: boolean;
+  onShowRoleChooser: () => void;
+  onLogout: () => void;
+}
+
+export default function AdminView({ nome, showRoleSwitch, onShowRoleChooser, onLogout }: Props) {
+  const [screen, setScreen] = useState<AdminScreen>("home");
+  const [dipendenti, setDipendenti] = useState<Dipendente[]>([]);
+  const [dipLoading, setDipLoading] = useState(true);
+  const [utenti, setUtenti] = useState<UtenteWebApp[]>([]);
+  const [utentiLoading, setUtentiLoading] = useState(false);
+  const [ticket, setTicket] = useState<Ticket[]>([]);
+  const [ticketLoading, setTicketLoading] = useState(false);
+
+  const fetchDipendenti = useCallback(async () => {
+    setDipLoading(true);
+    try { setDipendenti(await DipendentiApi.list()); } catch { setDipendenti([]); }
+    finally { setDipLoading(false); }
+  }, []);
+  const fetchUtenti = useCallback(async () => {
+    setUtentiLoading(true);
+    try { setUtenti(await UtentiApi.list()); } catch { setUtenti([]); }
+    finally { setUtentiLoading(false); }
+  }, []);
+  const fetchTicket = useCallback(async () => {
+    setTicketLoading(true);
+    try { setTicket(await TicketApi.list()); } catch { setTicket([]); }
+    finally { setTicketLoading(false); }
+  }, []);
+
+  useEffect(() => { fetchDipendenti(); }, [fetchDipendenti]);
+  useEffect(() => { if (screen === "utenti") fetchUtenti(); }, [screen, fetchUtenti]);
+  useEffect(() => { if (screen === "ticket") fetchTicket(); }, [screen, fetchTicket]);
+
+  const senzaUsername = dipendenti.filter(d => !d.username);
+  const firstName = nome.split(" ")[0] || "utente";
+  const nTicketNuovi = ticket.filter(t => t.stato === "Nuovo").length;
+
+  // "Audit Log" non compare nel menu in basso — si raggiunge dalla home, di fianco
+  // a "Gestisci utenti web app", per non affollare la barra di navigazione principale.
+  const navs: { id: AdminScreen | "logout"; label: string; icon: keyof typeof NavIcons }[] = [
+    { id: "home",      label: "Home",         icon: "home" },
+    { id: "abilitare", label: "Da abilitare",  icon: "daAbilitare" },
+    { id: "utenti",    label: "Utenti",        icon: "utenti" },
+    { id: "ticket",    label: "Ticket",        icon: "comunicazioni" },
+    { id: "logout",    label: "Esci",          icon: "logout" }
+  ];
+
+  return (
+    <div className="app-screen gp-screen">
+      <div className="gp-main">
+        <div className="app-header">
+          <div className="app-greeting">Buongiorno,<br />{firstName}</div>
+          <div className="app-logo"><Logo /></div>
+        </div>
+        <div className="app-content">
+          <RoleSwitchMini visible={showRoleSwitch} onClick={onShowRoleChooser} />
+          {screen === "home" && <AdminHome dipendentiSenzaUsername={senzaUsername} onGo={setScreen} />}
+          {screen === "abilitare" && (
+            <AdminAbilitare dipendenti={senzaUsername} loading={dipLoading} onRefresh={fetchDipendenti} onCreated={() => { fetchDipendenti(); fetchUtenti(); }} />
+          )}
+          {screen === "utenti"  && <AdminUtenti utenti={utenti} loading={utentiLoading} onRefresh={fetchUtenti} />}
+          {screen === "ticket"  && <AdminTicket ticket={ticket} loading={ticketLoading} onRefresh={fetchTicket} />}
+          {screen === "audit"   && <AdminAuditLog />}
+          {screen === "sicurezza" && <AdminSicurezza />}
+        </div>
+      </div>
+      <div className="bottom-nav">
+        {navs.map(nav => (
+          <div
+            key={nav.id}
+            className={`bnav-item ${screen === nav.id ? "active" : ""}`}
+            onClick={() => (nav.id === "logout" ? onLogout() : setScreen(nav.id as AdminScreen))}
+          >
+            <div className="bnav-icon">{NavIcons[nav.icon]}</div>
+            <div className="bnav-label">
+              {nav.label}
+              {nav.id === "ticket" && nTicketNuovi > 0 ? ` (${nTicketNuovi})` : ""}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
