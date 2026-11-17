@@ -2,6 +2,43 @@ import { notion, rt, sel, title, chk, dateStart } from "./notionClient.js";
 
 const DB_DOCUMENTI = "f1f54a3159514019958e3c50ba0f9094";
 
+// File upload validation — allowed MIME types and extensions
+export const ALLOWED_MIME_TYPES = new Set([
+  "application/pdf",
+  "image/png", "image/jpeg", "image/gif", "image/webp",
+  "application/msword",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "text/plain"
+]);
+
+export const ALLOWED_EXTENSIONS = new Set([
+  "pdf", "png", "jpg", "jpeg", "gif", "webp", "doc", "docx", "xlsx", "txt"
+]);
+
+export const MIME_FROM_EXT: Record<string, string> = {
+  pdf: "application/pdf",
+  png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg",
+  gif: "image/gif", webp: "image/webp",
+  doc: "application/msword",
+  docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  txt: "text/plain"
+};
+
+export function validateFileUpload(fileName: string, contentType: string): void {
+  if (!ALLOWED_MIME_TYPES.has(contentType)) {
+    throw new Error(`Tipo MIME non consentito: ${contentType}. Consentiti: ${[...ALLOWED_MIME_TYPES].join(", ")}`);
+  }
+  const ext = fileName.split(".").pop()?.toLowerCase();
+  if (!ext || !ALLOWED_EXTENSIONS.has(ext)) {
+    throw new Error(`Estensione non consentita: ${ext || "mancante"}. Consentite: ${[...ALLOWED_EXTENSIONS].join(", ")}`);
+  }
+  if (MIME_FROM_EXT[ext] !== contentType) {
+    throw new Error(`Estensione .${ext} non corrisponde al Content-Type ${contentType}`);
+  }
+}
+
 export type StatoFirma = "Da firmare" | "In attesa di verifica" | "Firmato" | "Respinto" | "";
 export type CaricatoDaRuolo = "GP" | "Privacy" | "Dipendente" | "";
 
@@ -55,7 +92,9 @@ export interface DocumentoCreateInput {
 async function buildAllegatoProps(input: { fileBase64?: string; fileName?: string; contentType?: string; linkAllegato?: string }) {
   const props: Record<string, any> = {};
   if (input.fileBase64 && input.fileName) {
-    const uploadId = await notion.uploadFile(input.fileName, input.contentType || "application/octet-stream", input.fileBase64);
+    const contentType = input.contentType || "application/octet-stream";
+    validateFileUpload(input.fileName, contentType); // Validate before upload
+    const uploadId = await notion.uploadFile(input.fileName, contentType, input.fileBase64);
     props["Allegato"] = { files: [{ type: "file_upload", file_upload: { id: uploadId }, name: input.fileName }] };
     props["Allegato nome"] = { rich_text: [{ text: { content: input.fileName } }] };
   } else {

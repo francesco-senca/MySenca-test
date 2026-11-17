@@ -32,6 +32,21 @@ import { authMiddleware } from "./middleware/auth.middleware.js";
 import { requireRole } from "./middleware/role.middleware.js";
 import { RotationService } from "./services/RotationService.js";
 
+// Startup guards — fail fast on misconfiguration that would break security in production
+if (process.env.NODE_ENV === "production") {
+  const corsOriginsCheck = (process.env.CORS_ORIGIN || "").split(",").map(o => o.trim()).filter(Boolean);
+  if (corsOriginsCheck.length === 0) {
+    throw new Error("CORS_ORIGIN deve essere impostata in produzione (es. 'https://mysenca.onrender.com').");
+  }
+  const webConcurrency = process.env.WEB_CONCURRENCY ? parseInt(process.env.WEB_CONCURRENCY, 10) : 1;
+  if (webConcurrency > 1) {
+    console.error("❌ ERRORE: WEB_CONCURRENCY > 1 rilevato, ma l'Audit Log usa cache in-memory (single-instance).");
+    console.error("   Opzioni: (1) Imposta WEB_CONCURRENCY=1 su Render, oppure");
+    console.error("   (2) Implementa lock distribuito (Redis/PostgreSQL) in AuditService.ts");
+    process.exit(1);
+  }
+}
+
 // Rete di sicurezza a livello di processo — trovata necessaria testando oggi
 // l'autenticazione: alcuni controller (preesistenti, non introdotti da questo
 // intervento) non hanno un try/catch attorno alle chiamate a Notion. Senza questo,
@@ -58,7 +73,7 @@ process.on("uncaughtException", (err) => {
 const corsOrigins = (process.env.CORS_ORIGIN || "").split(",").map(o => o.trim()).filter(Boolean);
 const corsOptions: cors.CorsOptions = corsOrigins.length > 0
   ? { origin: corsOrigins }
-  : {}; // nessuna CORS_ORIGIN impostata: permissivo (comportamento precedente), pensato per lo sviluppo locale
+  : { origin: false }; // deny-all default in dev if not set (safer default)
 
 const app = express();
 

@@ -3,12 +3,14 @@
 // Niente OAuth2 diretto su questo backend: n8n fa da intermediario.
 import { webhookHeaders } from "./WebhookAuth.js";
 
-const N8N_EMAIL_WEBHOOK = process.env.N8N_EMAIL_WEBHOOK_URL || "https://senca-hub.duckdns.org/webhook/senca-email";
+const N8N_EMAIL_WEBHOOK = process.env.N8N_EMAIL_WEBHOOK_URL;
+if (!N8N_EMAIL_WEBHOOK) throw new Error("N8N_EMAIL_WEBHOOK_URL mancante nelle variabili d'ambiente.");
 
 // Workflow separato e dedicato solo ai documenti privacy con allegato ("MySenca -
 // Invio Documenti Privacy"), per non toccare il workflow email esistente e già
 // funzionante. Webhook indipendente, path diverso.
-const N8N_DOCUMENTI_PRIVACY_WEBHOOK = process.env.N8N_DOCUMENTI_PRIVACY_WEBHOOK_URL || "https://senca-hub.duckdns.org/webhook/senca-documenti-privacy";
+const N8N_DOCUMENTI_PRIVACY_WEBHOOK = process.env.N8N_DOCUMENTI_PRIVACY_WEBHOOK_URL;
+if (!N8N_DOCUMENTI_PRIVACY_WEBHOOK) throw new Error("N8N_DOCUMENTI_PRIVACY_WEBHOOK_URL mancante nelle variabili d'ambiente.");
 
 export const EmailService = {
   // Firma mantenuta com'era (accessToken non più usato, tenuto per non toccare i chiamanti)
